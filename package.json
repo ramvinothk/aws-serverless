@@ -1,0 +1,11 @@
+{
+  "name": "aws-serverless",
+  "version": "0.1.0",
+  "scripts": {
+    "deploy": "sls deploy --stage dev"
+  },
+  "author": "Ramvinoth Kasipandian",
+  "dependencies": {
+    "aws-sdk": "^2.1133.0"
+  }
+}
