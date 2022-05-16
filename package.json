@@ -6,6 +6,8 @@
   },
   "author": "Ramvinoth Kasipandian",
   "dependencies": {
-    "aws-sdk": "^2.1133.0"
+    "@aws-sdk/util-dynamodb": "^3.87.0",
+    "aws-sdk": "^2.1133.0",
+    "uuid": "^8.3.2"
   }
 }

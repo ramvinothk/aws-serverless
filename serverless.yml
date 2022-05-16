@@ -1,12 +1,21 @@
-service: poc
+service: serverless-poc
+
+package:
+  exclude:
+    - .idea/**
+    - .serverless/**
 
 provider:
   name: aws
   runtime: nodejs14.x
   profile: demo
+  region: ${self:custom.region}
   environment:
     user_pool_id: { Ref: CognitoUserPool }
     client_id: { Ref: CognitoUserPoolClient }
+    dynamodb_table: ${self:service}-${self:custom.defaultStage}
+    s3_bucket: sls-bucket-poc-01
+    sqs: serverless-poc-sqs
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -14,13 +23,41 @@ provider:
         - cognito-idp:AdminCreateUser
         - cognito-idp:AdminSetUserPassword
       Resource: "*"
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${self:custom.region}:*:table/${self:provider.environment.dynamodb_table}"
+    - Effect: Allow
+      Action:
+        - ses:SendRawEmail
+        - ses:SendEmail
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - s3:*
+      Resource:
+        - { "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "ServerlessDeploymentBucket" } ] ] }
+        - "arn:aws:s3:::sls-bucket/*"
+    - Effect: "Allow"
+      Action:
+        - "sqs:GetQueueUrl"
+        - "sqs:ListQueues"
+      Resource: "*"
 
 custom:
   defaultStage: dev
   currentStage: ${opt:stage, self:custom.defaultStage}
   userPoolName: test-user-pool-${self:custom.currentStage}
   userPoolClientName: test-user-pool-client-${self:custom.currentStage}
+  region: us-west-1
 
+
+#Lambda Functions
 functions:
   loginUser:
     handler: user/login.handler
@@ -29,7 +66,6 @@ functions:
           path: user/login
           method: post
           cors: true
-
   signupUser:
     handler: user/signup.handler
     events:
@@ -38,61 +74,103 @@ functions:
           method: post
           cors: true
 
-  authapi:
-    handler: user/private.handler
+  create:
+    handler: controller/create.handler
     events:
       - http:
-          path: user/private
+          path: /controller
           method: post
           cors: true
           authorizer:
             type: COGNITO_USER_POOLS
             authorizerId:
-              Ref: ApiGatewayAuthorizer
+              Ref: Authorizer
 
+  list:
+    handler: controller/list.handler
+    events:
+      - http:
+          path: /controller
+          method: get
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: Authorizer
+  get:
+    handler: controller/get.handler
+    events:
+      - http:
+          path: /controller/{id}
+          method: get
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: Authorizer
+
+  update:
+    handler: controller/update.handler
+    events:
+      - http:
+          path: /controller/{id}
+          method: put
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: Authorizer
+
+  delete:
+    handler: controller/delete.handler
+    events:
+      - http:
+          path: /controller/{id}
+          method: delete
+          cors: true
+          authorizer:
+            type: COGNITO_USER_POOLS
+            authorizerId:
+              Ref: Authorizer
+
+  eventNotification:
+    handler: controller/listeners.handler
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::GetAtt:
+              - SlsDynamoDbTable
+              - StreamArn
+          batchSize: 5
+      - s3:
+          bucket: ${self:provider.environment.s3_bucket}
+          event: s3:ObjectCreated:*
+          rules:
+            - prefix: uploads/
+            - suffix: .jpg
+          existing: true
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - Queues
+              - Arn
+# AWS Resource Creation
 resources:
   Resources:
-    CognitoUserPool:
-      Type: "AWS::Cognito::UserPool"
-      Properties:
-        MfaConfiguration: OFF
-        UserPoolName: ${self:custom.userPoolName}
-        UsernameAttributes:
-          - email
-        Policies:
-          PasswordPolicy:
-            MinimumLength: 6
-            RequireLowercase: False
-            RequireNumbers: True
-            RequireSymbols: False
-            RequireUppercase: True
-        AutoVerifiedAttributes: ["email"]
-    CognitoUserPoolClient:
-      Type: "AWS::Cognito::UserPoolClient"
-      Properties:
-        ClientName: ${self:custom.userPoolClientName}
-        GenerateSecret: False
-        UserPoolId:
-          Ref: CognitoUserPool
-        ExplicitAuthFlows:
-          - "ADMIN_NO_SRP_AUTH"
-    ApiGatewayAuthorizer:
-      DependsOn:
-        - ApiGatewayRestApi
-      Type: AWS::ApiGateway::Authorizer
-      Properties:
-        Name: cognito-authorizer
-        IdentitySource: method.request.header.Authorization
-        RestApiId:
-          Ref: ApiGatewayRestApi
-        Type: COGNITO_USER_POOLS
-        ProviderARNs:
-          - Fn::GetAtt: [CognitoUserPool, Arn]
-  Outputs:
-    CognitoUserPoolArn:
-      Value:
-        Fn::GetAtt:
-          - CognitoUserPool
-          - Arn
-      Export:
-        Name: CognitoUserPoolArn-${self:custom.currentStage}
+    CognitoUserPool: ${file(./resources/cognitoUserPool.yml):CognitoUserPool}
+    CognitoUserPoolClient: ${file(./resources/cognitoClient.yml):CognitoUserPoolClient}
+    Authorizer: ${file(./resources/authorizer.yml):Authorizer}
+    SlsDynamoDbTable: ${file(./resources/dynamoDB.yml):SlsDynamoDbTable}
+    SlsS3Bucket: ${file(./resources/s3.yml):SlsS3Bucket}
+    Queues: ${file(./resources/sqs.yml):Queues}
+
+  # outputs
+#  Outputs:
+#    CognitoUserPoolArn:
+#      Value:
+#        Fn::GetAtt:
+#          - CognitoUserPool
+#          - Arn
+#      Export:
+#        Name: CognitoUserPoolArn-${self:custom.currentStage}

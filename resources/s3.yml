@@ -1,0 +1,10 @@
+SlsS3Bucket:
+  Type: AWS::S3::Bucket
+  Properties:
+    AccessControl: Private
+    BucketName: ${self:provider.environment.s3_bucket}
+    LifecycleConfiguration:
+      Rules:
+        - Id: ExpireRule
+          Status: Enabled
+          ExpirationInDays: '1'
