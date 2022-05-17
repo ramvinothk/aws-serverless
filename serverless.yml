@@ -16,6 +16,7 @@ provider:
     dynamodb_table: ${self:service}-${self:custom.defaultStage}
     s3_bucket: sls-bucket-poc-01
     sqs: serverless-poc-sqs
+    sns: !Ref 'MySNSTopic'
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -34,8 +35,7 @@ provider:
       Resource: "arn:aws:dynamodb:${self:custom.region}:*:table/${self:provider.environment.dynamodb_table}"
     - Effect: Allow
       Action:
-        - ses:SendRawEmail
-        - ses:SendEmail
+        - sns:Publish
       Resource: "*"
     - Effect: Allow
       Action:
@@ -164,7 +164,13 @@ resources:
     SlsDynamoDbTable: ${file(./resources/dynamoDB.yml):SlsDynamoDbTable}
     SlsS3Bucket: ${file(./resources/s3.yml):SlsS3Bucket}
     Queues: ${file(./resources/sqs.yml):Queues}
-
+    MySNSTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        Subscription:
+          - Endpoint: ram16vinoth@gmail.com
+            Protocol: "email"
+        TopicName: "SampleTopic"
   # outputs
 #  Outputs:
 #    CognitoUserPoolArn:

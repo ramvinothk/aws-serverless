@@ -1,6 +1,6 @@
 const  AWS = require('aws-sdk');
 const DynamoDB = AWS.DynamoDB
-const AWS_SES = new AWS.SES({ region: "us-west-1" });
+const AWS_SNS = new AWS.SNS({ region: "us-west-1" });
 module.exports.handler = (event, context, callback) => {
     console.log(JSON.stringify(event));
     for (const record of event.Records) {
@@ -15,26 +15,12 @@ module.exports.handler = (event, context, callback) => {
         if(record.eventSource === 'aws:sqs'){
             recordObj= record.body
         }
-        let params = {
-            Source: "ram16vinoth@gmail.com",
-            Destination: {
-                ToAddresses: ["ram13vinoth@yahoo.co.in"]
-            },
-            ReplyToAddresses: [],
-            Message: {
-                Body: {
-                    Text: {
-                        Charset: "UTF-8",
-                        Data: `EventSource: ${record.eventSource} \n EventName: ${record.eventName} \n Data: ${recordObj}`
-                    }
-                },
-                Subject: {
-                    Charset: "UTF-8",
-                    Data: `Hello!`
-                }
-            }
+        const params = {
+            Subject: record.eventSource,
+            Message: `EventName: ${record.eventName}`,
+            TopicArn: process.env.sns
         };
-        AWS_SES.sendEmail(params).promise().then(res =>{
+        AWS_SNS.publish(params).promise().then(res =>{
             console.log(res);
         }).catch(e=>{
             console.log(e);
