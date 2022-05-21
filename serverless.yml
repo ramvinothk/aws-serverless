@@ -170,6 +170,8 @@ resources:
         Subscription:
           - Endpoint: ram16vinoth@gmail.com
             Protocol: "email"
+          - Endpoint: dev.rereddy@gmail.com
+            Protocol: "email"
         TopicName: "SampleTopic"
   # outputs
 #  Outputs:
